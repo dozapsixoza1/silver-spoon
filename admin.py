@@ -2,7 +2,6 @@ from aiogram import Router, types
 from aiogram.filters import Command
 from config import ADMIN_IDS
 from database import get_all_users, add_credits
-import asyncio
 
 admin_router = Router()
 
@@ -11,12 +10,11 @@ async def admin_panel(message: types.Message):
     if message.from_user.id not in ADMIN_IDS:
         return
     await message.answer("Команды:\n/addcredits <user_id> <количество>\n/stats\n/broadcast <текст>")
-
 @admin_router.message(Command("stats"))
 async def stats(message: types.Message):
     if message.from_user.id not in ADMIN_IDS:
         return
-    users = await get_all_users()
+    users = get_all_users()
     total_credits = sum(u['credits'] for u in users)
     await message.answer(f"Пользователей: {len(users)}\nВсего кредитов: {total_credits}")
 
@@ -29,7 +27,7 @@ async def addcredits(message: types.Message):
         await message.answer("Использование: /addcredits user_id количество")
         return
     _, uid, amt = parts
-    await add_credits(int(uid), int(amt))
+    add_credits(int(uid), int(amt))
     await message.answer(f"Начислено {amt} кредитов пользователю {uid}")
 
 @admin_router.message(Command("broadcast"))
@@ -39,7 +37,7 @@ async def broadcast(message: types.Message):
     text = message.text.replace("/broadcast", "", 1).strip()
     if not text:
         return
-    users = await get_all_users()
+    users = get_all_users()
     sent = 0
     for u in users:
         try:
