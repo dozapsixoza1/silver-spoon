@@ -5,7 +5,7 @@ import py7zr
 import tarfile
 import aiofiles
 from config import UPLOAD_DIR
-from elastic import index_file
+from search import index_file
 
 rarfile.UNRAR_TOOL = "unrar"
 
@@ -57,10 +57,10 @@ async def extract_archive(archive_path: str) -> list:
     return extracted_files
 
 async def index_extracted_files(files: list, bot, chat_id: int):
-    total_indexed = 0
+    total = 0
     for file in files:
         if file.lower().endswith(('.csv', '.xlsx', '.xls', '.txt', '.json')):
-            res = await index_file(file)
-            total_indexed += res
-            await bot.send_message(chat_id, f"📄 Проиндексирован {os.path.basename(file)}: {res} записей")
-    return total_indexed
+            res = index_file(file)
+            total += res
+            await bot.send_message(chat_id, f"📄 {os.path.basename(file)}: {res} записей")
+    return total
