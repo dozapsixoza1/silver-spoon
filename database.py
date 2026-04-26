@@ -1,5 +1,4 @@
 import sqlite3
-import asyncio
 from config import DATABASE
 
 def init_db():
@@ -10,6 +9,7 @@ def init_db():
             tg_id INTEGER PRIMARY KEY,
             credits INTEGER DEFAULT 0,
             total_queries INTEGER DEFAULT 0,
+            subscribed BOOLEAN DEFAULT 0,
             registered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     ''')
@@ -24,26 +24,14 @@ def init_db():
     ''')
     c.execute('''
         CREATE VIRTUAL TABLE IF NOT EXISTS fts_data USING fts5(
-            content,  -- все данные в одной строке (json или конкатенация полей)
-            phone,
-            email,
-            full_name,
-            nickname,
-            address,
-            passport,
-            birth_date
+            content, phone, email, full_name, nickname, address, passport, birth_date
         )
     ''')
     c.execute('''
         CREATE TABLE IF NOT EXISTS raw_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            phone TEXT,
-            email TEXT,
-            full_name TEXT,
-            nickname TEXT,
-            address TEXT,
-            passport TEXT,
-            birth_date TEXT
+            phone TEXT, email TEXT, full_name TEXT, nickname TEXT,
+            address TEXT, passport TEXT, birth_date TEXT
         )
     ''')
     conn.commit()
@@ -52,15 +40,24 @@ def init_db():
 def get_user(tg_id: int):
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
-    c.execute("SELECT credits, total_queries FROM users WHERE tg_id = ?", (tg_id,))
+    c.execute("SELECT credits, total_queries, subscribed FROM users WHERE tg_id = ?", (tg_id,))
     row = c.fetchone()
     conn.close()
-    return {"credits": row[0], "total_queries": row[1]} if row else None
+    if row:
+        return {"credits": row[0], "total_queries": row[1], "subscribed": bool(row[2])}
+    return None
 
 def create_user(tg_id: int):
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
-    c.execute("INSERT OR IGNORE INTO users (tg_id, credits) VALUES (?, 0)", (tg_id,))
+    c.execute("INSERT OR IGNORE INTO users (tg_id, credits, subscribed) VALUES (?, 0, 0)", (tg_id,))
+    conn.commit()
+    conn.close()
+
+def set_subscribed(tg_id: int, status: bool):
+    conn = sqlite3.connect(DATABASE)
+    c = conn.cursor()
+    c.execute("UPDATE users SET subscribed = ? WHERE tg_id = ?", (1 if status else 0, tg_id))
     conn.commit()
     conn.close()
 
@@ -110,7 +107,6 @@ def insert_record(record: dict):
     ''', (record.get('phone'), record.get('email'), record.get('full_name'), record.get('nickname'),
           record.get('address'), record.get('passport'), record.get('birth_date')))
     rowid = c.lastrowid
-    # построим полный текст для fts
     content = ' '.join(str(v) for v in record.values() if v)
     c.execute('''
         INSERT INTO fts_data (rowid, content, phone, email, full_name, nickname, address, passport, birth_date)
@@ -123,7 +119,6 @@ def insert_record(record: dict):
 def search_fts(query: str):
     conn = sqlite3.connect(DATABASE)
     c = conn.cursor()
-    # ищем по всем полям
     sql = '''
         SELECT raw_data.phone, raw_data.email, raw_data.full_name, raw_data.nickname,
                raw_data.address, raw_data.passport, raw_data.birth_date
